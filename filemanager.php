@@ -386,7 +386,7 @@ if (isset($_POST['upl'])) {
     }
 
     if ($errors == 0 && $uploads > 0) {
-        fm_set_msg(sprintf('All files uploaded to <b>%s</b>', fm_enc($path)));
+        fm_set_msg(sprintf('All %d files uploaded to <b>%s</b>',$uploads, fm_enc($path)));
     } elseif ($errors == 0 && $uploads == 0) {
         fm_set_msg('Nothing uploaded', 'alert');
     } else {
@@ -612,11 +612,11 @@ if (isset($_GET['upload'])) {
         <form action="" method="post" enctype="multipart/form-data">
             <input type="hidden" name="p" value="<?php echo fm_enc(FM_PATH) ?>">
             <input type="hidden" name="upl" value="1">
-            <input type="file" name="upload[]"><br>
-            <input type="file" name="upload[]"><br>
-            <input type="file" name="upload[]"><br>
-            <input type="file" name="upload[]"><br>
-            <input type="file" name="upload[]"><br>
+            <input type="file" name="upload[]" multiple><br>
+            <input type="file" name="upload[]" multiple><br>
+            <input type="file" name="upload[]" multiple><br>
+            <input type="file" name="upload[]" multiple><br>
+            <input type="file" name="upload[]" multiple><br>
             <br>
             <p>
                 <button class="btn"><i class="icon-apply"></i> Upload</button> &nbsp;
