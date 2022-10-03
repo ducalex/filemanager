@@ -19,7 +19,7 @@ $use_highlightjs = true;
 $highlightjs_style = 'vs';
 
 // Default timezone for date() and time() - http://php.net/manual/en/timezones.php
-$default_timezone = 'Europe/Minsk'; // UTC+3
+$default_timezone = date_default_timezone_get();
 
 // Root path for file manager
 $root_path = $_SERVER['DOCUMENT_ROOT'];
@@ -35,7 +35,7 @@ $http_host = $_SERVER['HTTP_HOST'];
 $iconv_input_encoding = 'CP1251';
 
 // date() format for file modification date
-$datetime_format = 'd.m.y H:i';
+$datetime_format = 'Y-m-d H:i';
 
 //--- EDIT BELOW CAREFULLY OR DO NOT EDIT AT ALL
 
@@ -48,7 +48,7 @@ if (defined('FM_EMBED')) {
     date_default_timezone_set($default_timezone);
 
     ini_set('default_charset', 'UTF-8');
-    if (version_compare(PHP_VERSION, '5.6.0', '<') && function_exists('mb_internal_encoding')) {
+    if (function_exists('mb_internal_encoding')) {
         mb_internal_encoding('UTF-8');
     }
     if (function_exists('mb_regex_encoding')) {
