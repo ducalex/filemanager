@@ -89,6 +89,16 @@ if (isset($_GET['logout'])) {
     fm_redirect(FM_SELF_URL);
 }
 
+// CSRF
+if (empty($_SESSION['csrf'])) $_SESSION['csrf'] = sha1(microtime(true));
+define('FM_CSRF_TOKEN', $_SESSION['csrf']);
+if (!empty($_POST)) {
+    if (empty($_POST['csrf']) || $_POST['csrf'] !== FM_CSRF_TOKEN) {
+        fm_set_msg('Session expired (invalid CSRF token)', 'error');
+        fm_redirect(FM_SELF_URL . '?p=');
+    }
+}
+
 // Show image here
 if (isset($_GET['img'])) {
     fm_show_image($_GET['img']);
@@ -117,7 +127,8 @@ if ($use_auth) {
         fm_show_message();
         ?>
         <div class="path">
-            <form action="" method="post" style="margin:10px;text-align:center">
+            <form method="post" style="margin:10px;text-align:center">
+                <input type="hidden" name="csrf" value="<?php echo FM_CSRF_TOKEN ?>">
                 <input name="fm_usr" value="" placeholder="Username" required>
                 <input type="password" name="fm_pwd" value="" placeholder="Password" required>
                 <input type="submit" value="Login">
@@ -643,7 +654,8 @@ if (isset($_GET['upload'])) {
     <div class="path">
         <p><b>Uploading files</b></p>
         <p class="break-word">Destination folder: <?php echo fm_enc(fm_convert_win(FM_ROOT_PATH . '/' . FM_PATH)) ?></p>
-        <form action="" method="post" enctype="multipart/form-data">
+        <form method="post" enctype="multipart/form-data">
+            <input type="hidden" name="csrf" value="<?php echo FM_CSRF_TOKEN ?>">
             <input type="hidden" name="p" value="<?php echo fm_enc(FM_PATH) ?>">
             <input type="hidden" name="upl" value="1">
             <input type="file" name="upload[]" multiple><br>
@@ -676,7 +688,8 @@ if (isset($_POST['copy'])) {
     ?>
     <div class="path">
         <p><b>Copying</b></p>
-        <form action="" method="post">
+        <form method="post">
+            <input type="hidden" name="csrf" value="<?php echo FM_CSRF_TOKEN ?>">
             <input type="hidden" name="p" value="<?php echo fm_enc(FM_PATH) ?>">
             <input type="hidden" name="finish" value="1">
             <?php
@@ -758,6 +771,8 @@ if (isset($_GET['view']) || isset($_GET['edit'])) {
 
     fm_show_header(); // HEADER
     fm_show_nav_path(FM_PATH); // current path
+
+    fm_show_message();
 
     $file_url = FM_ROOT_URL . fm_convert_win((FM_PATH != '' ? '/' . FM_PATH : '') . '/' . $file);
     $file_path = $path . '/' . $file;
@@ -888,7 +903,8 @@ if (isset($_GET['view']) || isset($_GET['edit'])) {
             // Video content
             echo '<div class="preview-video"><video src="' . fm_enc($file_url) . '" width="640" height="360" controls preload="metadata"></video></div>';
         } elseif ($is_text && $is_editor) {
-            echo '<form method="post" action="?p='.urlencode(FM_PATH).'&amp;edit='.urlencode($file).'">';
+            echo '<form method="post">';
+            echo '<input type="hidden" name="csrf" value="' . FM_CSRF_TOKEN . '">';
             echo '<div class="float-right"><input type="submit" name="save" value="Save"></div>';
             echo '<textarea class="text-editor" name="content">' . fm_enc($content) . '</textarea>';
             echo '</form>';
@@ -946,7 +962,8 @@ if (isset($_GET['chmod']) && !FM_IS_WIN) {
         <p>
             Full path: <?php echo fm_enc($file_path) ?><br>
         </p>
-        <form action="" method="post">
+        <form method="post">
+            <input type="hidden" name="csrf" value="<?php echo FM_CSRF_TOKEN ?>">
             <input type="hidden" name="p" value="<?php echo fm_enc(FM_PATH) ?>">
             <input type="hidden" name="chmod" value="<?php echo fm_enc($file) ?>">
 
@@ -1001,7 +1018,8 @@ $num_files = count($files);
 $num_folders = count($folders);
 $all_files_size = 0;
 ?>
-<form action="" method="post">
+<form method="post">
+<input type="hidden" name="csrf" value="<?php echo FM_CSRF_TOKEN ?>">
 <input type="hidden" name="p" value="<?php echo fm_enc(FM_PATH) ?>">
 <input type="hidden" name="group" value="1">
 <table><tr>
