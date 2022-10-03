@@ -1742,7 +1742,7 @@ function fm_show_message()
  */
 function fm_show_header()
 {
-    $sprites_ver = '20160315';
+    $sprites_ver = date('Ymd', filemtime(__FILE__));
     header("Content-Type: text/html; charset=utf-8");
     header("Expires: Sat, 26 Jul 1997 05:00:00 GMT");
     header("Cache-Control: no-store, no-cache, must-revalidate, post-check=0, pre-check=0");
@@ -1771,6 +1771,7 @@ code.maxheight,pre.maxheight{max-height:512px}input[type="checkbox"]{margin:0;pa
 #wrapper{max-width:1000px;min-width:400px;margin:10px auto}
 .path{padding:4px 7px;border:1px solid #ddd;background-color:#fff;margin-bottom:10px}
 .path .buttons {color:#ddd;font-size:x-small;}
+.footer{margin-top: 1em;}
 .right{text-align:right}.center{text-align:center}.float-right{float:right}
 .message{padding:4px 7px;border:1px solid #ddd;background-color:#fff}
 .message.ok{border-color:green;color:green}
@@ -1824,7 +1825,7 @@ code.maxheight,pre.maxheight{max-height:512px}input[type="checkbox"]{margin:0;pa
 function fm_show_footer()
 {
     ?>
-<p class="center"><small><a href="https://github.com/alexantr/filemanager" target="_blank">PHP File Manager</a></small></p>
+<p class="center footer"><small><a href="https://github.com/alexantr/filemanager" target="_blank">PHP File Manager</a></small></p>
 </div>
 <script>
 function newfolder(p){var n=prompt('New folder name','folder');if(n!==null&&n!==''){window.location.search='p='+encodeURIComponent(p)+'&new='+encodeURIComponent(n);}}
@@ -1852,32 +1853,18 @@ function checkbox_toggle(){var l=get_checkboxes();l.push(this);change_checkboxes
  */
 function fm_show_image($img)
 {
-    $modified_time = gmdate('D, d M Y 00:00:00') . ' GMT';
-    $expires_time = gmdate('D, d M Y 00:00:00', strtotime('+1 day')) . ' GMT';
-
     $img = trim($img);
+
     $images = fm_get_images();
     $image = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAEElEQVR42mL4//8/A0CAAQAI/AL+26JNFgAAAABJRU5ErkJggg==';
     if (isset($images[$img])) {
         $image = $images[$img];
     }
     $image = base64_decode($image);
-    if (function_exists('mb_strlen')) {
-        $size = mb_strlen($image, '8bit');
-    } else {
-        $size = strlen($image);
-    }
+    $size = strlen($image);
 
-    if (function_exists('header_remove')) {
-        header_remove('Cache-Control');
-        header_remove('Pragma');
-    } else {
-        header('Cache-Control:');
-        header('Pragma:');
-    }
-
-    header('Last-Modified: ' . $modified_time, true, 200);
-    header('Expires: ' . $expires_time);
+    header('Cache-Control: max-age=3600');
+    header('Pragma: cache');
     header('Content-Length: ' . $size);
     header('Content-Type: image/png');
     echo $image;
