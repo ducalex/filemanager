@@ -169,25 +169,48 @@ unset($p, $use_auth, $iconv_input_encoding, $use_highlightjs, $highlightjs_style
 
 // Download
 if (isset($_GET['dl'])) {
-    $dl = fm_clean_path($_GET['dl']);
-    $dl = basename($dl);
-    $path = FM_REAL_PATH;
-    if ($dl != '' && is_file($path . '/' . $dl)) {
-        header('Content-Description: File Transfer');
-        header('Content-Type: application/octet-stream');
-        header('Content-Disposition: attachment; filename="' . basename($path . '/' . $dl) . '"');
-        header('Content-Transfer-Encoding: binary');
-        header('Connection: Keep-Alive');
-        header('Expires: 0');
-        header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
-        header('Pragma: public');
-        header('Content-Length: ' . filesize($path . '/' . $dl));
-        readfile($path . '/' . $dl);
+    $path_dl = FM_REAL_PATH . '/' . basename($_GET['dl']);
+    if (is_file($path_dl)) {
+        fm_download_file($path_dl);
         exit;
-    } else {
-        fm_set_msg('File not found', 'error');
-        fm_redirect(FM_SELF_URL . '?p=' . urlencode(FM_PATH));
     }
+    fm_set_msg('File not found', 'error');
+    fm_redirect(FM_SELF_URL . '?p=' . urlencode(FM_PATH));
+}
+
+// Download zip
+elseif (isset($_POST['dl'])) {
+    $path = FM_REAL_PATH;
+
+    if (!class_exists('ZipArchive')) {
+        fm_set_msg('Operations with archives are not available', 'error');
+    } elseif (empty($_POST['file'])) {
+        fm_set_msg('No selection', 'alert');
+    } else {
+        $files = array_filter($_POST['file'], 'strlen');
+        if (count($files) == 1) {
+            $one_file = basename(reset($files));
+            $zipname = $one_file . '_' . date('ymd_His') . '.zip';
+        } else {
+            $zipname = 'archive_' . date('ymd_His') . '.zip';
+        }
+        $zippath = tempnam(sys_get_temp_dir(), 'fm_');
+        chdir($path);
+        $zip = new ZipArchive();
+        if ($res = $zip->open($zippath, ZipArchive::CREATE|ZipArchive::OVERWRITE)) {
+            $res = fm_add_files_to_archive($zip, $files);
+            $zip->close();
+        }
+        if (!$res || !file_exists($zippath)) {
+            fm_set_msg('Archive not created', 'error');
+            @unlink($zippath);
+        } else {
+            fm_download_file($zippath, $zipname);
+            @unlink($zippath);
+            exit;
+        }
+    }
+    fm_redirect(FM_SELF_URL . '?p=' . urlencode(FM_PATH));
 }
 
 /*************************** /READ ACTIONS ***************************/
@@ -446,75 +469,71 @@ elseif (isset($_POST['group'], $_POST['delete'])) {
 
 // Pack files
 elseif (isset($_POST['group'], $_POST['zip'])) {
+    $path = FM_REAL_PATH;
+    
     if (!class_exists('ZipArchive')) {
         fm_set_msg('Operations with archives are not available', 'error');
-        fm_redirect(FM_SELF_URL . '?p=' . urlencode(FM_PATH));
-    }
-
-    if (!empty($_POST['file'])) {
-        $files = $_POST['file'];
-        $path = FM_REAL_PATH;
-
-        chdir($path);
-
+    } elseif (empty($files)) {
+        fm_set_msg('Nothing selected', 'alert');
+    } else {
+        $files = array_filter($_POST['file'], 'strlen');
         if (count($files) == 1) {
-            $one_file = reset($files);
-            $one_file = basename($one_file);
+            $one_file = basename(reset($files));
             $zipname = $one_file . '_' . date('ymd_His') . '.zip';
         } else {
             $zipname = 'archive_' . date('ymd_His') . '.zip';
         }
-
-        $zipper = new FM_Zipper();
-        $res = $zipper->create($zipname, $files);
-
-        if ($res) {
-            fm_set_msg(sprintf('Archive <b>%s</b> created', fm_enc($zipname)));
-        } else {
-            fm_set_msg('Archive not created', 'error');
+        chdir($path);
+        $zip = new ZipArchive();
+        if ($res = $zip->open($zipname, ZipArchive::CREATE|ZipArchive::OVERWRITE)) {
+            $res = fm_add_files_to_archive($zip, $files);
+            $zip->close();
         }
-    } else {
-        fm_set_msg('Nothing selected', 'alert');
+        if (!$res || !file_exists($zipname)) {
+            fm_set_msg('Archive not created', 'error');
+            @unlink($zipname);
+        } else {
+            fm_set_msg(sprintf('Archive <b>%s</b> created', fm_enc($zipname)));
+        }
     }
-
     fm_redirect(FM_SELF_URL . '?p=' . urlencode(FM_PATH));
 }
 
 // Unpack
 elseif (isset($_GET['unzip'])) {
-    $unzip = fm_clean_path($_GET['unzip']);
-    $unzip = basename($unzip);
+    $unzip = basename($_GET['unzip']);
     $path = FM_REAL_PATH;
+    $zip_path = $path . '/' . $unzip;
 
     if (!class_exists('ZipArchive')) {
         fm_set_msg('Operations with archives are not available', 'error');
         fm_redirect(FM_SELF_URL . '?p=' . urlencode(FM_PATH));
-    }
-
-    if ($unzip != '' && is_file($path . '/' . $unzip)) {
-        $zip_path = $path . '/' . $unzip;
-
-        //to folder
-        $tofolder = '';
-        if (isset($_GET['tofolder'])) {
-            $tofolder = pathinfo($zip_path, PATHINFO_FILENAME);
-            if (fm_mkdir($path . '/' . $tofolder, true)) {
-                $path .= '/' . $tofolder;
-            }
-        }
-
-        $zipper = new FM_Zipper();
-        $res = $zipper->unzip($zip_path, $path);
-
-        if ($res) {
-            fm_set_msg('Archive unpacked');
-        } else {
-            fm_set_msg('Archive not unpacked', 'error');
-        }
-
-    } else {
+    } elseif (!is_file($zip_path)) {
         fm_set_msg('File not found', 'error');
+        fm_redirect(FM_SELF_URL . '?p=' . urlencode(FM_PATH));
     }
+
+    //to folder
+    if (isset($_GET['tofolder'])) {
+        $tofolder = pathinfo($zip_path, PATHINFO_FILENAME);
+        if (fm_mkdir($path . '/' . $tofolder, true)) {
+            $path .= '/' . $tofolder;
+        }
+    }
+
+    $zipper = new ZipArchive();
+    $res = false;
+    if ($zipper->open($zip_path)) {
+        $res = $zipper->extractTo($path);
+        $zipper->close();
+    }
+
+    if ($res) {
+        fm_set_msg('Archive unpacked');
+    } else {
+        fm_set_msg('Archive not unpacked', 'error');
+    }
+
     fm_redirect(FM_SELF_URL . '?p=' . urlencode(FM_PATH));
 }
 
@@ -922,7 +941,6 @@ if (isset($_GET['chmod']) && !FM_IS_WIN) {
         </p>
         <form method="post">
             <input type="hidden" name="csrf" value="<?php echo FM_CSRF_TOKEN ?>">
-            <input type="hidden" name="p" value="<?php echo fm_enc(FM_PATH) ?>">
             <input type="hidden" name="chmod" value="<?php echo fm_enc($file) ?>">
 
             <table class="compact-table">
@@ -972,6 +990,7 @@ fm_show_nav_path(FM_PATH); // current path
 // messages
 fm_show_message();
 
+$path = FM_REAL_PATH;
 $num_files = count($files);
 $num_folders = count($folders);
 $all_files_size = 0;
@@ -1021,6 +1040,7 @@ foreach ($folders as $f) {
 <a title="Copy to..." href="?p=&amp;copy=<?php echo urlencode(trim(FM_PATH . '/' . $f, '/')) ?>"><i class="icon-copy"></i></a>
 <?php endif; ?>
 <a title="Direct link" href="<?php echo fm_enc(FM_ROOT_URL . (FM_PATH != '' ? '/' . FM_PATH : '') . '/' . $f . '/') ?>" target="_blank"><i class="icon-chain"></i></a>
+<a title="Download zip" href="?p=<?php echo urlencode(FM_PATH) ?>&amp;zip=<?php echo urlencode($f) ?>"><i class="icon-download"></i></a>
 </td></tr>
     <?php
     flush();
@@ -1090,6 +1110,7 @@ folders: <?php echo $num_folders ?>
     <input type="submit" name="copy" value="Copy/Move">
     <input type="submit" name="zip" value="Pack" onclick="return confirm('Create archive?')">
     <?php endif; ?>
+    <input type="submit" name="dl" value="Download" onclick="return confirm('Download archive?')">
 </div>
 </form>
 
@@ -1590,110 +1611,47 @@ function fm_get_text_names()
 }
 
 /**
- * Class to work with zip files (using ZipArchive)
+ * Add files recursively to an open archive
+ * @param ZipArchive|PharData $zip 
+ * @param array $files 
+ * @return bool 
  */
-class FM_Zipper
+function fm_add_files_to_archive($zip, $files) 
 {
-    private $zip;
-
-    public function __construct()
-    {
-        $this->zip = new ZipArchive();
-    }
-
-    /**
-     * Create archive with name $filename and files $files (RELATIVE PATHS!)
-     * @param string $filename
-     * @param array|string $files
-     * @return bool
-     */
-    public function create($filename, $files)
-    {
-        $res = $this->zip->open($filename, ZipArchive::CREATE);
-        if ($res !== true) {
-            return false;
-        }
-        if (is_array($files)) {
-            foreach ($files as $f) {
-                if (!$this->addFileOrDir($f)) {
-                    $this->zip->close();
-                    return false;
-                }
+    foreach ($files as $file) {
+        if (is_dir($file)) {
+            if (!$zip->addEmptyDir($file)) {
+                return false;
             }
-            $this->zip->close();
-            return true;
+            if (!fm_add_files_to_archive($zip, glob($file . '/*'))) {
+                return false;
+            }
         } else {
-            if ($this->addFileOrDir($files)) {
-                $this->zip->close();
-                return true;
+            if (!$zip->addFile($file)) {
+                return false;
             }
-            return false;
         }
     }
+    return true;
+}
 
-    /**
-     * Extract archive $filename to folder $path (RELATIVE OR ABSOLUTE PATHS)
-     * @param string $filename
-     * @param string $path
-     * @return bool
-     */
-    public function unzip($filename, $path)
-    {
-        $res = $this->zip->open($filename);
-        if ($res !== true) {
-            return false;
-        }
-        if ($this->zip->extractTo($path)) {
-            $this->zip->close();
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * Add file/folder to archive
-     * @param string $filename
-     * @return bool
-     */
-    private function addFileOrDir($filename)
-    {
-        if (is_file($filename)) {
-            return $this->zip->addFile($filename);
-        } elseif (is_dir($filename)) {
-            return $this->addDir($filename);
-        }
-        return false;
-    }
-
-    /**
-     * Add folder recursively
-     * @param string $path
-     * @return bool
-     */
-    private function addDir($path)
-    {
-        if (!$this->zip->addEmptyDir($path)) {
-            return false;
-        }
-        $objects = scandir($path);
-        if (is_array($objects)) {
-            foreach ($objects as $file) {
-                if ($file != '.' && $file != '..') {
-                    if (is_dir($path . '/' . $file)) {
-                        if (!$this->addDir($path . '/' . $file)) {
-                            return false;
-                        }
-                    } elseif (is_file($path . '/' . $file)) {
-                        if (!$this->zip->addFile($path . '/' . $file)) {
-                            return false;
-                        }
-                    }
-                }
-            }
-            return true;
-        }
-        return false;
-    }
+/**
+ * 
+ * @param string $path 
+ * @return void 
+ */
+function fm_download_file($path, $name = null)
+{
+    header('Content-Description: File Transfer');
+    header('Content-Type: application/octet-stream');
+    header('Content-Disposition: attachment; filename="' . ($name ?: basename($path)) . '"');
+    header('Content-Transfer-Encoding: binary');
+    header('Connection: Keep-Alive');
+    header('Expires: 0');
+    header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
+    header('Pragma: public');
+    header('Content-Length: ' . filesize($path));
+    readfile($path);
 }
 
 //--- templates functions
