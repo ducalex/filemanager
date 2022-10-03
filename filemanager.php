@@ -202,6 +202,23 @@ if (isset($_GET['new'])) {
     fm_redirect(FM_SELF_URL . '?p=' . urlencode(FM_PATH));
 }
 
+// Create file
+if (isset($_GET['newfile'])) {
+    $new = fm_clean_path(basename($_GET['newfile']));
+    $path = FM_ROOT_PATH;
+    if (FM_PATH != '') {
+        $path .= '/' . FM_PATH;
+    }
+    if ($new === '' || $new === '..' || $new === '.') {
+        fm_set_msg('Wrong file name', 'error');
+    } elseif (fm_create($path . '/' . $new, false)) {
+        fm_set_msg(sprintf('File <b>%s</b> created', fm_enc($new)));
+    } else {
+        fm_set_msg(sprintf('File <b>%s</b> not created', fm_enc($new)), 'error');
+    }
+    fm_redirect(FM_SELF_URL . '?p=' . urlencode(FM_PATH));
+}
+
 // Copy folder / file
 if (isset($_GET['copy'], $_GET['finish'])) {
     // from
@@ -1055,12 +1072,15 @@ folders: <?php echo $num_folders ?>
 }
 ?>
 </table>
-<p class="path"><a href="#" onclick="select_all();return false;"><i class="icon-checkbox"></i> Select all</a> &nbsp;
-<a href="#" onclick="unselect_all();return false;"><i class="icon-checkbox_uncheck"></i> Unselect all</a> &nbsp;
-<a href="#" onclick="invert_all();return false;"><i class="icon-checkbox_invert"></i> Invert selection</a></p>
-<p><input type="submit" name="delete" value="Delete" onclick="return confirm('Delete selected files and folders?')">
-<input type="submit" name="zip" value="Pack" onclick="return confirm('Create archive?')">
-<input type="submit" name="copy" value="Copy"></p>
+<div>
+    <button onclick="select_all();return false">Select all</button> 
+    <button onclick="unselect_all();return false">Unselect all</button> 
+    <button onclick="invert_all();return false">Invert selection</button>
+    &nbsp;|&nbsp;
+    <input type="submit" name="delete" value="Delete" onclick="return confirm('Delete selected files and folders?')">
+    <input type="submit" name="zip" value="Pack" onclick="return confirm('Create archive?')">
+    <input type="submit" name="copy" value="Copy">
+</div>
 </form>
 
 <?php
@@ -1172,6 +1192,24 @@ function fm_rcopy($path, $dest, $upd = true, $force = true)
         return fm_copy($path, $dest, $upd);
     }
     return false;
+}
+
+/**
+ * Safely create file
+ * @param string $file
+ * @param bool $force
+ * @return bool
+ */
+function fm_create($file, $force)
+{
+    if (file_exists($file)) {
+        if ($force) {
+            unlink($file);
+        } else {
+            return false;
+        }
+    }
+    return touch($file);
 }
 
 /**
@@ -1659,9 +1697,10 @@ function fm_show_nav_path($path)
 {
     ?>
 <div class="path">
-<div class="float-right">
-<a title="Upload files" href="?p=<?php echo urlencode(FM_PATH) ?>&amp;upload"><i class="icon-upload"></i></a>
-<a title="New folder" href="#" onclick="newfolder('<?php echo fm_enc(FM_PATH) ?>');return false;"><i class="icon-folder_add"></i></a>
+<div class="float-right buttons">
+<a title="Upload files" href="?p=<?php echo urlencode(FM_PATH) ?>&amp;upload"><i class="icon-upload"></i> Upload</a> | 
+<a title="New folder" href="#" onclick="newfolder('<?php echo fm_enc(FM_PATH) ?>');return false;"><i class="icon-folder_add"></i> New folder</a>
+<a title="New file" href="#" onclick="newfile('<?php echo fm_enc(FM_PATH) ?>');return false;"><i class="icon-document"></i> New file</a>
 <?php if (FM_USE_AUTH): ?><a title="Logout" href="?logout=1"><i class="icon-logout"></i></a><?php endif; ?>
 </div>
         <?php
@@ -1732,6 +1771,7 @@ pre.with-hljs code{margin:0;border:0;overflow:visible}
 code.maxheight,pre.maxheight{max-height:512px}input[type="checkbox"]{margin:0;padding:0}
 #wrapper{max-width:1000px;min-width:400px;margin:10px auto}
 .path{padding:4px 7px;border:1px solid #ddd;background-color:#fff;margin-bottom:10px}
+.path .buttons {color:#ddd;font-size:x-small;}
 .right{text-align:right}.center{text-align:center}.float-right{float:right}
 .message{padding:4px 7px;border:1px solid #ddd;background-color:#fff}
 .message.ok{border-color:green;color:green}
@@ -1788,6 +1828,7 @@ function fm_show_footer()
 </div>
 <script>
 function newfolder(p){var n=prompt('New folder name','folder');if(n!==null&&n!==''){window.location.search='p='+encodeURIComponent(p)+'&new='+encodeURIComponent(n);}}
+function newfile(p){var n=prompt('New file name','file');if(n!==null&&n!==''){window.location.search='p='+encodeURIComponent(p)+'&newfile='+encodeURIComponent(n);}}
 function rename(p,f){var n=prompt('New name',f);if(n!==null&&n!==''&&n!=f){window.location.search='p='+encodeURIComponent(p)+'&ren='+encodeURIComponent(f)+'&to='+encodeURIComponent(n);}}
 function change_checkboxes(l,v){for(var i=l.length-1;i>=0;i--){l[i].checked=(typeof v==='boolean')?v:!l[i].checked;}}
 function get_checkboxes(){var i=document.getElementsByName('file[]'),a=[];for(var j=i.length-1;j>=0;j--){if(i[j].type='checkbox'){a.push(i[j]);}}return a;}
