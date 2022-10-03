@@ -223,37 +223,35 @@ elseif (isset($_GET['new'])) {
     $new = fm_clean_path($_GET['new']);
     $new = str_replace('/', '', $new);
     $path = FM_REAL_PATH;
-    if ($new != '' && $new != '..' && $new != '.') {
-        if (fm_mkdir($path . '/' . $new, false) === true) {
-            fm_set_msg(sprintf('Folder <b>%s</b> created', fm_enc($new)));
-        } elseif (fm_mkdir($path . '/' . $new, false) === $path . '/' . $new) {
-            fm_set_msg(sprintf('Folder <b>%s</b> already exists', fm_enc($new)), 'alert');
-        } else {
-            fm_set_msg(sprintf('Folder <b>%s</b> not created', fm_enc($new)), 'error');
-        }
-    } else {
+    if ($new === '' || $new === '..' || $new === '.') {
         fm_set_msg('Wrong folder name', 'error');
+    } elseif (fm_mkdir($path . '/' . $new, false) === true) {
+        fm_set_msg(sprintf('Folder <b>%s</b> created', fm_enc($new)));
+    } elseif (fm_mkdir($path . '/' . $new, false) === $path . '/' . $new) {
+        fm_set_msg(sprintf('Folder <b>%s</b> already exists', fm_enc($new)), 'alert');
+    } else {
+        fm_set_msg(sprintf('Folder <b>%s</b> not created', fm_enc($new)), 'error');
     }
     fm_redirect(FM_SELF_URL . '?p=' . urlencode(FM_PATH));
 }
 
 // Create file
 elseif (isset($_GET['newfile'])) {
-    $file = fm_clean_path($_GET['newfile']);
-    $file = str_replace('/', '', $file);
+    $new = fm_clean_path($_GET['newfile']);
+    $new = str_replace('/', '', $new);
     $path = FM_REAL_PATH;
-    if ($file === '' || $file === '..' || $file === '.') {
+    if ($new === '' || $new === '..' || $new === '.') {
         fm_set_msg('Wrong file name', 'error');
-    } elseif (fm_create($path . '/' . $file, false)) {
-        fm_set_msg(sprintf('File <b>%s</b> created', fm_enc($file)));
+    } elseif (fm_create($path . '/' . $new, false) === true) {
+        fm_set_msg(sprintf('File <b>%s</b> created', fm_enc($new)));
     } else {
-        fm_set_msg(sprintf('File <b>%s</b> not created', fm_enc($file)), 'error');
+        fm_set_msg(sprintf('File <b>%s</b> not created', fm_enc($new)), 'error');
     }
     fm_redirect(FM_SELF_URL . '?p=' . urlencode(FM_PATH));
 }
 
 // Save file
-elseif (isset($_GET['edit'], $_POST['save'], $_POST['content'])) {
+elseif (isset($_GET['view'], $_GET['edit'], $_POST['save'], $_POST['content'])) {
     $file = fm_clean_path($_GET['edit']);
     $file = str_replace('/', '', $file);
     $path = FM_REAL_PATH;
@@ -264,7 +262,7 @@ elseif (isset($_GET['edit'], $_POST['save'], $_POST['content'])) {
     } else {
         fm_set_msg(sprintf('File <b>%s</b> not saved', fm_enc($file)), 'error');
     }
-    fm_redirect(FM_SELF_URL . '?p=' . urlencode(FM_PATH) . '&edit=' . $file);
+    fm_redirect(FM_SELF_URL . '?p=' . urlencode(FM_PATH) . '&view=' . $file . '&edit=1');
 }
 
 // Copy folder / file
@@ -721,10 +719,10 @@ if (isset($_GET['copy']) && !isset($_GET['finish'])) {
 }
 
 // file viewer/editor
-if (isset($_GET['view']) || isset($_GET['edit'])) {
-    $file = isset($_GET['view']) ? $_GET['view'] : $_GET['edit'];
-    $file = fm_clean_path($file);
-    $file = str_replace('/', '', $file);
+if (isset($_GET['view'])) {
+    $file = basename($_GET['view']);
+    $path = FM_REAL_PATH;
+
     if ($file == '' || !is_file($path . '/' . $file)) {
         fm_set_msg('File not found', 'error');
         fm_redirect(FM_SELF_URL . '?p=' . urlencode(FM_PATH));
@@ -799,7 +797,7 @@ if (isset($_GET['view']) || isset($_GET['edit'])) {
                 <?php
             }
             // Image info
-            if ($is_image) {
+            if ($is_image && function_exists('getimagesize')) {
                 $image_size = getimagesize($file_path);
                 echo 'Image sizes: ' . (isset($image_size[0]) ? $image_size[0] : '0') . ' x ' . (isset($image_size[1]) ? $image_size[1] : '0') . '<br>';
             }
@@ -899,9 +897,10 @@ if (isset($_GET['view']) || isset($_GET['edit'])) {
 
 // chmod (not for Windows)
 if (isset($_GET['chmod']) && !FM_IS_WIN) {
-    $file = $_GET['chmod'];
-    $file = fm_clean_path($file);
+    $file = fm_clean_path($_GET['chmod']);
     $file = str_replace('/', '', $file);
+    $path = FM_REAL_PATH;
+
     if ($file == '' || (!is_file($path . '/' . $file) && !is_dir($path . '/' . $file))) {
         fm_set_msg('File not found', 'error');
         fm_redirect(FM_SELF_URL . '?p=' . urlencode(FM_PATH));
@@ -1307,12 +1306,13 @@ function fm_redirect($url, $code = 302)
 function fm_clean_path($path)
 {
     $path = trim($path);
-    $path = trim($path, '\\/');
-    $path = str_replace(array('../', '..\\'), '', $path);
-    if ($path == '..') {
+    $path = str_replace('\\', '/', $path);
+    $path = str_replace(['/./', '/../'], '/', "/$path/");
+    $path = trim($path, '/');
+    if ($path === '.' || $path === '..') {
         $path = '';
     }
-    return str_replace('\\', '/', $path);
+    return $path;
 }
 
 /**
