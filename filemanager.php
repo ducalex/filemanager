@@ -156,6 +156,7 @@ $p = fm_clean_path($p);
 // instead globals vars
 define('FM_PATH', $p);
 define('FM_USE_AUTH', $use_auth);
+define('FM_REAL_PATH', rtrim(FM_ROOT_PATH . '/' . FM_PATH, '/'));
 
 defined('FM_ICONV_INPUT_ENC') || define('FM_ICONV_INPUT_ENC', $iconv_input_encoding);
 defined('FM_USE_HIGHLIGHTJS') || define('FM_USE_HIGHLIGHTJS', $use_highlightjs);
@@ -168,14 +169,10 @@ unset($p, $use_auth, $iconv_input_encoding, $use_highlightjs, $highlightjs_style
 
 // Delete file / folder
 if (isset($_GET['del'])) {
-    $del = $_GET['del'];
-    $del = fm_clean_path($del);
+    $del = fm_clean_path($_GET['del']);
     $del = str_replace('/', '', $del);
+    $path = FM_REAL_PATH;
     if ($del != '' && $del != '..' && $del != '.') {
-        $path = FM_ROOT_PATH;
-        if (FM_PATH != '') {
-            $path .= '/' . FM_PATH;
-        }
         $is_dir = is_dir($path . '/' . $del);
         if (fm_rdelete($path . '/' . $del)) {
             $msg = $is_dir ? 'Folder <b>%s</b> deleted' : 'File <b>%s</b> deleted';
@@ -192,14 +189,10 @@ if (isset($_GET['del'])) {
 
 // Create folder
 if (isset($_GET['new'])) {
-    $new = strip_tags($_GET['new']); // remove unwanted characters from folder name
-    $new = fm_clean_path($new);
+    $new = fm_clean_path($_GET['new']);
     $new = str_replace('/', '', $new);
+    $path = FM_REAL_PATH;
     if ($new != '' && $new != '..' && $new != '.') {
-        $path = FM_ROOT_PATH;
-        if (FM_PATH != '') {
-            $path .= '/' . FM_PATH;
-        }
         if (fm_mkdir($path . '/' . $new, false) === true) {
             fm_set_msg(sprintf('Folder <b>%s</b> created', fm_enc($new)));
         } elseif (fm_mkdir($path . '/' . $new, false) === $path . '/' . $new) {
@@ -215,11 +208,9 @@ if (isset($_GET['new'])) {
 
 // Create file
 if (isset($_GET['newfile'])) {
-    $file = fm_clean_path(basename($_GET['newfile']));
-    $path = FM_ROOT_PATH;
-    if (FM_PATH != '') {
-        $path .= '/' . FM_PATH;
-    }
+    $file = fm_clean_path($_GET['newfile']);
+    $file = str_replace('/', '', $file);
+    $path = FM_REAL_PATH;
     if ($file === '' || $file === '..' || $file === '.') {
         fm_set_msg('Wrong file name', 'error');
     } elseif (fm_create($path . '/' . $file, false)) {
@@ -232,11 +223,9 @@ if (isset($_GET['newfile'])) {
 
 // Save file
 if (isset($_GET['edit'], $_POST['save'], $_POST['content'])) {
-    $file = fm_clean_path($_GET['edit']);;
-    $path = FM_ROOT_PATH . '/';
-    if (FM_PATH != '') {
-        $path .= FM_PATH . '/';
-    }
+    $file = fm_clean_path($_GET['edit']);
+    $file = str_replace('/', '', $file);
+    $path = FM_REAL_PATH;
     if (!is_file($path . '/' . $file)) {
         fm_set_msg(sprintf('File <b>%b</b>does not exist', fm_enc($file)), 'error');
     } elseif (file_put_contents($path . '/' . $file, $_POST['content']) !== false) {
@@ -250,8 +239,7 @@ if (isset($_GET['edit'], $_POST['save'], $_POST['content'])) {
 // Copy folder / file
 if (isset($_GET['copy'], $_GET['finish'])) {
     // from
-    $copy = $_GET['copy'];
-    $copy = fm_clean_path($copy);
+    $copy = fm_clean_path($_GET['copy']);
     // empty path
     if ($copy == '') {
         fm_set_msg('Source path not defined', 'error');
@@ -260,11 +248,7 @@ if (isset($_GET['copy'], $_GET['finish'])) {
     // abs path from
     $from = FM_ROOT_PATH . '/' . $copy;
     // abs path to
-    $dest = FM_ROOT_PATH;
-    if (FM_PATH != '') {
-        $dest .= '/' . FM_PATH;
-    }
-    $dest .= '/' . basename($from);
+    $dest = FM_REAL_PATH . '/' . basename($from);
     // move?
     $move = isset($_GET['move']);
     // copy/move
@@ -281,7 +265,7 @@ if (isset($_GET['copy'], $_GET['finish'])) {
             }
         } else {
             if (fm_rcopy($from, $dest)) {
-                fm_set_msg(sprintf('Copyied from <b>%s</b> to <b>%s</b>', fm_enc($copy), fm_enc($msg_from)));
+                fm_set_msg(sprintf('Copied from <b>%s</b> to <b>%s</b>', fm_enc($copy), fm_enc($msg_from)));
             } else {
                 fm_set_msg(sprintf('Error while copying from <b>%s</b> to <b>%s</b>', fm_enc($copy), fm_enc($msg_from)), 'error');
             }
@@ -295,10 +279,7 @@ if (isset($_GET['copy'], $_GET['finish'])) {
 // Mass copy files/ folders
 if (isset($_POST['file'], $_POST['copy_to'], $_POST['finish'])) {
     // from
-    $path = FM_ROOT_PATH;
-    if (FM_PATH != '') {
-        $path .= '/' . FM_PATH;
-    }
+    $path = FM_REAL_PATH;
     // to
     $copy_to_path = FM_ROOT_PATH;
     $copy_to = fm_clean_path($_POST['copy_to']);
@@ -356,18 +337,13 @@ if (isset($_POST['file'], $_POST['copy_to'], $_POST['finish'])) {
 // Rename
 if (isset($_GET['ren'], $_GET['to'])) {
     // old name
-    $old = $_GET['ren'];
-    $old = fm_clean_path($old);
-    $old = str_replace('/', '', $old);
+    $old = fm_clean_path($_GET['ren']);
+    $old = basename($old);
     // new name
-    $new = $_GET['to'];
-    $new = fm_clean_path($new);
-    $new = str_replace('/', '', $new);
+    $new = fm_clean_path($_GET['to']);
+    $new = basename($new);
     // path
-    $path = FM_ROOT_PATH;
-    if (FM_PATH != '') {
-        $path .= '/' . FM_PATH;
-    }
+    $path = FM_REAL_PATH;
     // rename
     if ($old != '' && $new != '') {
         if (fm_rename($path . '/' . $old, $path . '/' . $new)) {
@@ -383,13 +359,9 @@ if (isset($_GET['ren'], $_GET['to'])) {
 
 // Download
 if (isset($_GET['dl'])) {
-    $dl = $_GET['dl'];
-    $dl = fm_clean_path($dl);
-    $dl = str_replace('/', '', $dl);
-    $path = FM_ROOT_PATH;
-    if (FM_PATH != '') {
-        $path .= '/' . FM_PATH;
-    }
+    $dl = fm_clean_path($_GET['dl']);
+    $dl = basename($dl);
+    $path = FM_REAL_PATH;
     if ($dl != '' && is_file($path . '/' . $dl)) {
         header('Content-Description: File Transfer');
         header('Content-Type: application/octet-stream');
@@ -409,11 +381,8 @@ if (isset($_GET['dl'])) {
 }
 
 // Upload
-if (isset($_POST['upl'])) {
-    $path = FM_ROOT_PATH;
-    if (FM_PATH != '') {
-        $path .= '/' . FM_PATH;
-    }
+if (isset($_POST['upl'], $_FILES['upload'])) {
+    $path = FM_REAL_PATH;
 
     $errors = 0;
     $uploads = 0;
@@ -443,14 +412,12 @@ if (isset($_POST['upl'])) {
 
 // Mass deleting
 if (isset($_POST['group'], $_POST['delete'])) {
-    $path = FM_ROOT_PATH;
-    if (FM_PATH != '') {
-        $path .= '/' . FM_PATH;
-    }
+    $path = FM_REAL_PATH;
 
-    $errors = 0;
-    $files = $_POST['file'];
-    if (is_array($files) && count($files)) {
+    if (!empty($_POST['file'])) {
+        $files = $_POST['file'];
+        $errors = 0;
+
         foreach ($files as $f) {
             if ($f != '') {
                 $new_path = $path . '/' . $f;
@@ -473,18 +440,15 @@ if (isset($_POST['group'], $_POST['delete'])) {
 
 // Pack files
 if (isset($_POST['group'], $_POST['zip'])) {
-    $path = FM_ROOT_PATH;
-    if (FM_PATH != '') {
-        $path .= '/' . FM_PATH;
-    }
-
     if (!class_exists('ZipArchive')) {
         fm_set_msg('Operations with archives are not available', 'error');
         fm_redirect(FM_SELF_URL . '?p=' . urlencode(FM_PATH));
     }
 
-    $files = $_POST['file'];
-    if (!empty($files)) {
+    if (!empty($_POST['file'])) {
+        $files = $_POST['file'];
+        $path = FM_REAL_PATH;
+
         chdir($path);
 
         if (count($files) == 1) {
@@ -512,14 +476,9 @@ if (isset($_POST['group'], $_POST['zip'])) {
 
 // Unpack
 if (isset($_GET['unzip'])) {
-    $unzip = $_GET['unzip'];
-    $unzip = fm_clean_path($unzip);
-    $unzip = str_replace('/', '', $unzip);
-
-    $path = FM_ROOT_PATH;
-    if (FM_PATH != '') {
-        $path .= '/' . FM_PATH;
-    }
+    $unzip = fm_clean_path($_GET['unzip']);
+    $unzip = basename($unzip);
+    $path = FM_REAL_PATH;
 
     if (!class_exists('ZipArchive')) {
         fm_set_msg('Operations with archives are not available', 'error');
@@ -555,10 +514,7 @@ if (isset($_GET['unzip'])) {
 
 // Change Perms (not for Windows)
 if (isset($_POST['chmod']) && !FM_IS_WIN) {
-    $path = FM_ROOT_PATH;
-    if (FM_PATH != '') {
-        $path .= '/' . FM_PATH;
-    }
+    $path = FM_REAL_PATH;
 
     $file = $_POST['chmod'];
     $file = fm_clean_path($file);
@@ -609,10 +565,7 @@ if (isset($_POST['chmod']) && !FM_IS_WIN) {
 /*************************** /ACTIONS ***************************/
 
 // get current path
-$path = FM_ROOT_PATH;
-if (FM_PATH != '') {
-    $path .= '/' . FM_PATH;
-}
+$path = FM_REAL_PATH;
 
 // check path
 if (!is_dir($path)) {
