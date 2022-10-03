@@ -60,10 +60,6 @@ if (defined('FM_EMBED')) {
     session_start();
 }
 
-if (empty($auth_users)) {
-    $use_auth = false;
-}
-
 $is_https = isset($_SERVER['HTTPS']) && ($_SERVER['HTTPS'] == 'on' || $_SERVER['HTTPS'] == 1)
     || isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] == 'https';
 
@@ -748,7 +744,7 @@ if (isset($_GET['view']) || isset($_GET['edit'])) {
     if ($ext == 'zip') {
         $is_zip = true;
         $view_title = 'Archive';
-        $filenames = fm_get_zif_info($file_path);
+        $filenames = fm_get_zip_info($file_path);
     } elseif (in_array($ext, fm_get_image_exts())) {
         $is_image = true;
         $view_title = 'Image';
@@ -1347,28 +1343,26 @@ function fm_get_filesize($size)
  * @param string $path
  * @return array|bool
  */
-function fm_get_zif_info($path)
+function fm_get_zip_info($path)
 {
-    if (function_exists('zip_open')) {
-        $arch = zip_open($path);
-        if ($arch) {
-            $filenames = array();
-            while ($zip_entry = zip_read($arch)) {
-                $zip_name = zip_entry_name($zip_entry);
-                $zip_folder = substr($zip_name, -1) == '/';
-                $filenames[] = array(
-                    'name' => $zip_name,
-                    'filesize' => zip_entry_filesize($zip_entry),
-                    'compressed_size' => zip_entry_compressedsize($zip_entry),
-                    'folder' => $zip_folder
-                    //'compression_method' => zip_entry_compressionmethod($zip_entry),
-                );
-            }
-            zip_close($arch);
-            return $filenames;
-        }
+    if (!class_exists('ZipArchive')) {
+        return false;
     }
-    return false;
+    $zip = new ZipArchive();
+    if (!$zip->open($path)) {
+        return false;
+    }
+    $files = array();
+    for ($i = 0; $file = $zip->statIndex($i); $i++) {
+        $files[] = array(
+            'name' => $file['name'],
+            'filesize' => $file['size'],
+            'compressed_size' => $file['comp_size'],
+            'folder' => false,
+        );
+    }
+    $zip->close();
+    return $files;
 }
 
 /**
