@@ -204,19 +204,36 @@ if (isset($_GET['new'])) {
 
 // Create file
 if (isset($_GET['newfile'])) {
-    $new = fm_clean_path(basename($_GET['newfile']));
+    $file = fm_clean_path(basename($_GET['newfile']));
     $path = FM_ROOT_PATH;
     if (FM_PATH != '') {
         $path .= '/' . FM_PATH;
     }
-    if ($new === '' || $new === '..' || $new === '.') {
+    if ($file === '' || $file === '..' || $file === '.') {
         fm_set_msg('Wrong file name', 'error');
-    } elseif (fm_create($path . '/' . $new, false)) {
-        fm_set_msg(sprintf('File <b>%s</b> created', fm_enc($new)));
+    } elseif (fm_create($path . '/' . $file, false)) {
+        fm_set_msg(sprintf('File <b>%s</b> created', fm_enc($file)));
     } else {
-        fm_set_msg(sprintf('File <b>%s</b> not created', fm_enc($new)), 'error');
+        fm_set_msg(sprintf('File <b>%s</b> not created', fm_enc($file)), 'error');
     }
     fm_redirect(FM_SELF_URL . '?p=' . urlencode(FM_PATH));
+}
+
+// Save file
+if (isset($_GET['edit'], $_POST['save'], $_POST['content'])) {
+    $file = fm_clean_path($_GET['edit']);;
+    $path = FM_ROOT_PATH . '/';
+    if (FM_PATH != '') {
+        $path .= FM_PATH . '/';
+    }
+    if (!is_file($path . '/' . $file)) {
+        fm_set_msg(sprintf('File <b>%b</b>does not exist', fm_enc($file)), 'error');
+    } elseif (file_put_contents($path . '/' . $file, $_POST['content']) !== false) {
+        fm_set_msg(sprintf('File <b>%s</b> saved', fm_enc($file)));
+    } else {
+        fm_set_msg(sprintf('File <b>%s</b> not saved', fm_enc($file)), 'error');
+    }
+    fm_redirect(FM_SELF_URL . '?p=' . urlencode(FM_PATH) . '&edit=' . $file);
 }
 
 // Copy folder / file
@@ -729,9 +746,9 @@ if (isset($_GET['copy']) && !isset($_GET['finish'])) {
     exit;
 }
 
-// file viewer
-if (isset($_GET['view'])) {
-    $file = $_GET['view'];
+// file viewer/editor
+if (isset($_GET['view']) || isset($_GET['edit'])) {
+    $file = isset($_GET['view']) ? $_GET['view'] : $_GET['edit'];
     $file = fm_clean_path($file);
     $file = str_replace('/', '', $file);
     if ($file == '' || !is_file($path . '/' . $file)) {
@@ -749,6 +766,7 @@ if (isset($_GET['view'])) {
     $mime_type = fm_get_mime_type($file_path);
     $filesize = filesize($file_path);
 
+    $is_editor = isset($_GET['edit']);
     $is_zip = false;
     $is_image = false;
     $is_audio = false;
@@ -824,6 +842,11 @@ if (isset($_GET['view'])) {
         <p>
             <b><a href="?p=<?php echo urlencode(FM_PATH) ?>&amp;dl=<?php echo urlencode($file) ?>"><i class="icon-download"></i> Download</a></b> &nbsp;
             <b><a href="<?php echo fm_enc($file_url) ?>" target="_blank"><i class="icon-chain"></i> Open</a></b> &nbsp;
+            <?php if ($is_text && !$is_editor) { ?>
+                <b><a href="?p=<?php echo urlencode(FM_PATH) ?>&amp;edit=<?php echo urlencode($file) ?>"><i class="icon-document"></i> Edit</a></b> &nbsp;
+            <?php } elseif ($is_text) { ?>
+                <b><a href="?p=<?php echo urlencode(FM_PATH) ?>&amp;view=<?php echo urlencode($file) ?>"><i class="icon-document"></i> View</a></b> &nbsp;
+            <?php } ?>
             <?php
             // ZIP actions
             if ($is_zip && $filenames !== false) {
@@ -864,6 +887,11 @@ if (isset($_GET['view'])) {
         } elseif ($is_video) {
             // Video content
             echo '<div class="preview-video"><video src="' . fm_enc($file_url) . '" width="640" height="360" controls preload="metadata"></video></div>';
+        } elseif ($is_text && $is_editor) {
+            echo '<form method="post" action="?p='.urlencode(FM_PATH).'&amp;edit='.urlencode($file).'">';
+            echo '<div class="float-right"><input type="submit" name="save" value="Save"></div>';
+            echo '<textarea class="text-editor" name="content">' . fm_enc($content) . '</textarea>';
+            echo '</form>';
         } elseif ($is_text) {
             if (FM_USE_HIGHLIGHTJS) {
                 // highlight
@@ -1780,6 +1808,7 @@ code.maxheight,pre.maxheight{max-height:512px}input[type="checkbox"]{margin:0;pa
 .btn{border:0;background:none;padding:0;margin:0;font-weight:bold;color:#296ea3;cursor:pointer}.btn:hover{color:#b00}
 .preview-img{max-width:100%;background:url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAKklEQVR42mL5//8/Azbw+PFjrOJMDCSCUQ3EABZc4S0rKzsaSvTTABBgAMyfCMsY4B9iAAAAAElFTkSuQmCC") repeat 0 0}
 .preview-video{position:relative;max-width:100%;height:0;padding-bottom:62.5%;margin-bottom:10px}.preview-video video{position:absolute;width:100%;height:100%;left:0;top:0;background:#000}
+.text-editor{width:100%;padding:0;margin:0;height:60vh;}
 [class*="icon-"]{display:inline-block;width:16px;height:16px;background:url("<?php echo FM_SELF_URL ?>?img=sprites&amp;t=<?php echo $sprites_ver ?>") no-repeat 0 0;vertical-align:bottom}
 .icon-document{background-position:-16px 0}.icon-folder{background-position:-32px 0}
 .icon-folder_add{background-position:-48px 0}.icon-upload{background-position:-64px 0}
