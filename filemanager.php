@@ -4,97 +4,70 @@
  * https://github.com/alexantr/filemanager
  */
 
-// Auth with login/password (set true/false to enable/disable it)
-$use_auth = true;
+$config = [
+    // Auth with login/password (set true/false to enable/disable it)
+    'auth_enabled' => true,
 
-// Users: array('Username' => 'Password', 'Username2' => 'Password2', ...)
-$auth_users = array(
-    'fm_admin' => 'fm_admin',
-);
+    // Users: array('Username' => 'Password', 'Username2' => 'Password2', ...)
+    'auth_users' => [
+        'fm_admin' => 'fm_admin',
+    ],
 
-// Read-only mode
-$readonly = false;
+    // Read-only mode
+    'readonly' => false,
 
-// Enable highlight.js (https://highlightjs.org/) on view's page
-$use_highlightjs = true;
+    // Default timezone for date() and time() - http://php.net/manual/en/timezones.php    
+    'timezone' => date_default_timezone_get(),
+    
+    // Root path for file manager
+    'root_path' => $_SERVER['DOCUMENT_ROOT'],
 
-// highlight.js style
-$highlightjs_style = 'vs';
+    // Root url for direct links in file manager. Typically '' represents DOCUMENT_ROOT.
+    'root_url' => '',
 
-// Default timezone for date() and time() - http://php.net/manual/en/timezones.php
-$default_timezone = date_default_timezone_get();
+    // date() format for file modification date
+    'datetime_format' => 'Y-m-d H:i',
 
-// Root path for file manager
-$root_path = $_SERVER['DOCUMENT_ROOT'];
-
-// Root url for links in file manager.Relative to $http_host. Variants: '', 'path/to/subfolder'
-// Will not working if $root_path will be outside of server document root
-$root_url = '';
-
-// Server hostname. Can set manually if wrong
-$http_host = $_SERVER['HTTP_HOST'];
-
-// input encoding for iconv
-$iconv_input_encoding = 'CP1251';
-
-// date() format for file modification date
-$datetime_format = 'Y-m-d H:i';
+    // input encoding for iconv
+    'iconv_input_encoding' => 'CP1251',
+];
 
 //--- EDIT BELOW CAREFULLY OR DO NOT EDIT AT ALL
 
-// if fm included
-if (defined('FM_EMBED')) {
-    $use_auth = false;
-} else {
-    @set_time_limit(600);
-
-    date_default_timezone_set($default_timezone);
-
-    ini_set('default_charset', 'UTF-8');
-    if (function_exists('mb_internal_encoding')) {
-        mb_internal_encoding('UTF-8');
+if (file_exists(__DIR__ . '/filemanager.cfg.php')) {
+    $extra_config = @include __DIR__ . '/filemanager.cfg.php';
+    if (is_array($extra_config)) {
+        $config = $extra_config + $config;
     }
-    if (function_exists('mb_regex_encoding')) {
-        mb_regex_encoding('UTF-8');
-    }
-
-    session_cache_limiter('');
-    session_name('filemanager');
-    session_start();
 }
 
-$is_https = isset($_SERVER['HTTPS']) && ($_SERVER['HTTPS'] == 'on' || $_SERVER['HTTPS'] == 1)
-    || isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] == 'https';
+// Setup global constants
+define('FM_ROOT_URL', rtrim('/' . fm_clean_path($config['root_url']), '/'));
+define('FM_SELF_URL', $_SERVER['PHP_SELF']);
 
-// clean and check $root_path
-$root_path = rtrim($root_path, '\\/');
-$root_path = str_replace('\\', '/', $root_path);
-if (!@is_dir($root_path)) {
-    echo sprintf('<h1>Root path "%s" not found!</h1>', fm_enc($root_path));
-    exit;
-}
-
-// clean $root_url
-$root_url = fm_clean_path($root_url);
-
-// abs path for site
-define('FM_ROOT_URL', ($is_https ? 'https' : 'http') . '://' . $http_host . (!empty($root_url) ? '/' . $root_url : ''));
-define('FM_SELF_URL', ($is_https ? 'https' : 'http') . '://' . $http_host . $_SERVER['PHP_SELF']);
-
-// instead globals vars
-define('FM_PATH', fm_clean_path($_GET['p']));
+define('FM_PATH', fm_clean_path($_GET['p'] ?? ''));
 define('FM_PARENT', FM_PATH === '' ? false : fm_clean_path(dirname(FM_PATH)));
-define('FM_ROOT_PATH', $root_path);
+define('FM_ROOT_PATH', str_replace('\\', '/', rtrim($config['root_path'], '\\/')));
 define('FM_REAL_PATH', rtrim(FM_ROOT_PATH . '/' . FM_PATH, '/'));
-define('FM_USE_AUTH', $use_auth && $auth_users);
-define('FM_READONLY', $readonly);
+define('FM_USE_AUTH', $config['auth_enabled']);
+define('FM_READONLY', $config['readonly']);
 define('FM_IS_WIN', DIRECTORY_SEPARATOR == '\\');
-define('FM_ICONV_INPUT_ENC', $iconv_input_encoding);
-define('FM_USE_HIGHLIGHTJS', $use_highlightjs);
-define('FM_HIGHLIGHTJS_STYLE', $highlightjs_style);
-define('FM_DATETIME_FORMAT', $datetime_format);
+define('FM_ICONV_INPUT_ENC', $config['iconv_input_encoding']);
+define('FM_DATETIME_FORMAT', $config['datetime_format']);
 
-unset($root_path, $p, $use_auth, $iconv_input_encoding, $use_highlightjs, $highlightjs_style);
+
+@set_time_limit(600);
+date_default_timezone_set($config['timezone']);
+ini_set('default_charset', 'UTF-8');
+if (function_exists('mb_internal_encoding')) {
+    mb_internal_encoding('UTF-8');
+}
+if (function_exists('mb_regex_encoding')) {
+    mb_regex_encoding('UTF-8');
+}
+session_cache_limiter('');
+session_name('filemanager');
+session_start();
 
 // CSRF
 if (empty($_SESSION['csrf'])) $_SESSION['csrf'] = sha1(microtime(true));
@@ -119,12 +92,12 @@ if (isset($_GET['img'])) {
 
 // Auth
 if (FM_USE_AUTH) {
-    if (isset($_SESSION['logged'], $auth_users[$_SESSION['logged']])) {
+    if (isset($_SESSION['logged'], $config['auth_users'][$_SESSION['logged']])) {
         // Logged
     } elseif (isset($_POST['fm_usr'], $_POST['fm_pwd'])) {
         // Logging In
         sleep(1);
-        if (isset($auth_users[$_POST['fm_usr']]) && $_POST['fm_pwd'] === $auth_users[$_POST['fm_usr']]) {
+        if (isset($config['auth_users'][$_POST['fm_usr']]) && $_POST['fm_pwd'] === $config['auth_users'][$_POST['fm_usr']]) {
             $_SESSION['logged'] = $_POST['fm_usr'];
             fm_set_msg('You are logged in');
             fm_redirect(FM_SELF_URL . '?p=');
@@ -158,6 +131,10 @@ if (!isset($_GET['p'])) {
     fm_redirect(FM_SELF_URL . '?p=');
 }
 
+// Finally check if our root path exists
+if (!@is_dir(FM_ROOT_PATH)) {
+    die(sprintf('<h1>Root path "%s" not found!</h1>', fm_enc(FM_ROOT_PATH)));
+}
 /*************************** READ ACTIONS ***************************/
 
 // Download
@@ -832,21 +809,7 @@ if (isset($_GET['view'])) {
             echo '<textarea class="text-editor" name="content">' . fm_enc($content) . '</textarea>';
             echo '</form>';
         } elseif ($is_text) {
-            if (FM_USE_HIGHLIGHTJS) {
-                // highlight
-                $hljs_classes = array(
-                    'shtml' => 'xml',
-                    'htaccess' => 'apache',
-                    'phtml' => 'php',
-                    'lock' => 'json',
-                    'svg' => 'xml',
-                );
-                $hljs_class = isset($hljs_classes[$ext]) ? 'lang-' . $hljs_classes[$ext] : 'lang-' . $ext;
-                if (empty($ext) || in_array(strtolower($file), fm_get_text_names()) || preg_match('#\.min\.(css|js)$#i', $file)) {
-                    $hljs_class = 'nohighlight';
-                }
-                $content = '<pre class="with-hljs"><code class="' . $hljs_class . '">' . fm_enc($content) . '</code></pre>';
-            } elseif (in_array($ext, array('php', 'php4', 'php5', 'phtml', 'phps'))) {
+            if (in_array($ext, array('php', 'php4', 'php5', 'phtml', 'phps'))) {
                 // php highlight
                 $content = highlight_string($content, true);
             } else {
@@ -1727,9 +1690,6 @@ code.maxheight,pre.maxheight{max-height:512px}input[type="checkbox"]{margin:0;pa
 </style>
 <link rel="icon" href="<?php echo FM_SELF_URL ?>?img=favicon" type="image/png">
 <link rel="shortcut icon" href="<?php echo FM_SELF_URL ?>?img=favicon" type="image/png">
-<?php if (isset($_GET['view']) && FM_USE_HIGHLIGHTJS): ?>
-<link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.2.0/styles/<?php echo FM_HIGHLIGHTJS_STYLE ?>.min.css">
-<?php endif; ?>
 </head>
 <body>
 <div id="wrapper">
@@ -1755,10 +1715,6 @@ function unselect_all(){var l=get_checkboxes();change_checkboxes(l,false);}
 function invert_all(){var l=get_checkboxes();change_checkboxes(l);}
 function checkbox_toggle(){var l=get_checkboxes();l.push(this);change_checkboxes(l);}
 </script>
-<?php if (isset($_GET['view']) && FM_USE_HIGHLIGHTJS): ?>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.2.0/highlight.min.js"></script>
-<script>hljs.initHighlightingOnLoad();</script>
-<?php endif; ?>
 </body>
 </html>
 <?php
