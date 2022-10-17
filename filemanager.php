@@ -18,7 +18,7 @@ $config = [
 
     // Default timezone for date() and time() - http://php.net/manual/en/timezones.php    
     'timezone' => date_default_timezone_get(),
-    
+
     // Root path for file manager
     'root_path' => $_SERVER['DOCUMENT_ROOT'],
 
@@ -34,11 +34,9 @@ $config = [
 
 //--- EDIT BELOW CAREFULLY OR DO NOT EDIT AT ALL
 
-if (file_exists(__DIR__ . '/filemanager.cfg.php')) {
-    $extra_config = @include __DIR__ . '/filemanager.cfg.php';
-    if (is_array($extra_config)) {
-        $config = $extra_config + $config;
-    }
+$config_file = preg_replace('/\.php\d*$/i', '.cfg.php', __FILE__);
+if (file_exists($config_file)) {
+    @include $config_file;
 }
 
 // Setup global constants
@@ -75,7 +73,7 @@ define('FM_CSRF_TOKEN', $_SESSION['csrf']);
 if (!empty($_POST)) {
     if (empty($_POST['csrf']) || $_POST['csrf'] !== FM_CSRF_TOKEN) {
         fm_set_msg('Session expired (invalid CSRF token)', 'error');
-        fm_redirect(FM_SELF_URL . '?p=');
+        fm_redirect(FM_SELF_URL . '?p=' . urlencode(FM_PATH));
     }
 }
 
@@ -100,7 +98,7 @@ if (FM_USE_AUTH) {
         if (isset($config['auth_users'][$_POST['fm_usr']]) && $_POST['fm_pwd'] === $config['auth_users'][$_POST['fm_usr']]) {
             $_SESSION['logged'] = $_POST['fm_usr'];
             fm_set_msg('You are logged in');
-            fm_redirect(FM_SELF_URL . '?p=');
+            fm_redirect(FM_SELF_URL);
         } else {
             unset($_SESSION['logged']);
             fm_set_msg('Wrong password', 'error');
@@ -126,11 +124,6 @@ if (FM_USE_AUTH) {
     }
 }
 
-// always use ?p=
-if (!isset($_GET['p'])) {
-    fm_redirect(FM_SELF_URL . '?p=');
-}
-
 // Finally check if our root path exists
 if (!@is_dir(FM_ROOT_PATH)) {
     die(sprintf('<h1>Root path "%s" not found!</h1>', fm_enc(FM_ROOT_PATH)));
@@ -139,26 +132,22 @@ if (!@is_dir(FM_ROOT_PATH)) {
 
 // Download
 if (isset($_GET['dl'])) {
-    $file = basename($_GET['dl']);
-    $path = FM_REAL_PATH;
-    if (is_file($path . '/' . $file)) {
-        fm_download_file($path . '/' . $file);
-        exit;
-    }
-    fm_set_msg('File not found', 'error');
-    fm_redirect(FM_SELF_URL . '?p=' . urlencode(FM_PATH));
+    $filepath = FM_REAL_PATH . '/' . basename($_GET['dl']);
+    $mode = empty($_GET['inline']) ? 'attachment' : 'inline';
+    fm_serve_file($filepath, null, fm_get_mime_type($filepath), $mode);
+    exit;
 }
 
 // Download zip
 elseif (isset($_POST['dl'])) {
+    $files = array_filter($_POST['file'], 'strlen');
     $path = FM_REAL_PATH;
 
     if (!class_exists('ZipArchive')) {
         fm_set_msg('Operations with archives are not available', 'error');
-    } elseif (empty($_POST['file'])) {
+    } elseif (empty($files)) {
         fm_set_msg('Nothing selected', 'alert');
     } else {
-        $files = array_filter($_POST['file'], 'strlen');
         if (count($files) == 1) {
             $one_file = basename(reset($files));
             $zipname = $one_file . '_' . date('ymd_His') . '.zip';
@@ -176,7 +165,7 @@ elseif (isset($_POST['dl'])) {
             fm_set_msg('Archive not created', 'error');
             @unlink($zippath);
         } else {
-            fm_download_file($zippath, $zipname);
+            fm_serve_file($zippath, $zipname);
             @unlink($zippath);
             exit;
         }
@@ -676,7 +665,7 @@ if (isset($_GET['view'])) {
 
     fm_show_message();
 
-    $file_url = FM_ROOT_URL . fm_convert_win((FM_PATH != '' ? '/' . FM_PATH : '') . '/' . $file);
+    $file_url = FM_SELF_URL . '?p=' . FM_PATH .'&inline=1&dl=' . $file;
     $file_path = $path . '/' . $file;
 
     $ext = strtolower(pathinfo($file_path, PATHINFO_EXTENSION));
@@ -756,7 +745,7 @@ if (isset($_GET['view'])) {
         </p>
         <p>
             <b><a href="?p=<?php echo urlencode(FM_PATH) ?>&amp;dl=<?php echo urlencode($file) ?>"><i class="icon-download"></i> Download</a></b> &nbsp;
-            <b><a href="<?php echo fm_enc($file_url) ?>" target="_blank"><i class="icon-chain"></i> Open</a></b> &nbsp;
+            <b><a href="<?php echo fm_enc(FM_ROOT_URL . (FM_PATH != '' ? '/' . FM_PATH : '') . '/' . $file) ?>" target="_blank"><i class="icon-chain"></i> Open</a></b> &nbsp;
             <?php if ($is_text && !$is_editor && !FM_READONLY) { ?>
                 <b><a href="?p=<?php echo urlencode(FM_PATH) ?>&amp;view=<?php echo urlencode($file) ?>&edit=1"><i class="icon-document"></i> Edit</a></b> &nbsp;
             <?php } elseif ($is_text) { ?>
@@ -810,7 +799,6 @@ if (isset($_GET['view'])) {
             echo '</form>';
         } elseif ($is_text) {
             if (in_array($ext, array('php', 'php4', 'php5', 'phtml', 'phps'))) {
-                // php highlight
                 $content = highlight_string($content, true);
             } else {
                 $content = '<pre>' . fm_enc($content) . '</pre>';
@@ -838,7 +826,6 @@ if (isset($_GET['chmod']) && !FM_IS_WIN) {
     fm_show_header(); // HEADER
     fm_show_nav_path(FM_PATH); // current path
 
-    $file_url = FM_ROOT_URL . (FM_PATH != '' ? '/' . FM_PATH : '') . '/' . $file;
     $file_path = $path . '/' . $file;
 
     $mode = fileperms($path . '/' . $file);
@@ -1547,21 +1534,59 @@ function fm_add_files_to_archive($zip, $files)
 
 /**
  * 
- * @param string $path 
- * @return void 
+ * @param string $filepath
+ * @param ?string $filename
+ * @param string $type
+ * @param string $disposition
+ * @return bool 
  */
-function fm_download_file($path, $name = null)
+function fm_serve_file($filepath, $filename = null, $type = 'application/octet-stream', $disposition = 'inline')
 {
-    header('Content-Description: File Transfer');
-    header('Content-Type: application/octet-stream');
-    header('Content-Disposition: attachment; filename="' . ($name ?: basename($path)) . '"');
-    header('Content-Transfer-Encoding: binary');
-    header('Connection: Keep-Alive');
-    header('Expires: 0');
-    header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
-    header('Pragma: public');
-    header('Content-Length: ' . filesize($path));
-    readfile($path);
+    /* Based on https://github.com/pomle/php-serveFilePartial */
+
+    if (!file_exists($filepath)) {
+        header("HTTP/1.1 404 Not Found");
+        echo 'File not found';
+        return false;
+    } elseif (!$handle = fopen($filepath, 'rb')) {
+        header("HTTP/1.1 500 Server Error");
+        echo 'File not readable';
+        return false;
+    }
+    
+    $filename = $filename ?? basename($filepath);
+    $filesize = filesize($filepath);
+
+    $byteBegin = 0;
+    $byteEnd = $filesize;
+
+    ### Parse Content-Range header for byte offsets, looks like "bytes=11525-" OR "bytes=11525-12451"
+    if (isset($_SERVER['HTTP_RANGE']) && preg_match('%bytes=(\d+)-(\d+)?%i', $_SERVER['HTTP_RANGE'], $match)) {
+        $byteBegin = (int)$match[1];
+        if (isset($match[2])) {
+            $finishBytes = (int)$match[2];
+            $byteEnd = $finishBytes + 1;
+        } else {
+            $finishBytes = $filesize - 1;
+        }
+        header("HTTP/1.1 206 Partial content");
+        header(sprintf('Content-Range: bytes %d-%d/%d', $byteBegin, $finishBytes, $filesize));
+        fseek($handle, $byteBegin, SEEK_SET);
+    }
+    $byteLength = $byteEnd - $byteBegin;
+
+    header('Content-Disposition: ' . $disposition . '; filename="' . $filename . '"');
+    header('Content-Length: ' . $byteLength);
+    header('Content-Type: ' . $type, true);
+    header('Accept-Ranges: bytes', true);
+
+    while ($byteLength > 0) {
+        $chunkSize = min(1024 * 1024, $byteLength);
+        $byteLength -= $chunkSize;
+        echo fread($handle, $chunkSize);
+        flush();
+    }
+    return true;
 }
 
 //--- templates functions
@@ -1580,7 +1605,7 @@ function fm_show_nav_path($path)
 <a title="New folder" href="#" onclick="newfolder('<?php echo fm_enc(FM_PATH) ?>');return false;"><i class="icon-folder_add"></i> New folder</a>
 <a title="New file" href="#" onclick="newfile('<?php echo fm_enc(FM_PATH) ?>');return false;"><i class="icon-document"></i> New file</a>
 <?php endif; ?>
-<?php if (FM_USE_AUTH): ?><a title="Logout" href="?logout=1"><i class="icon-logout"></i></a><?php endif; ?>
+<?php if (FM_USE_AUTH): ?> | <a title="Logout" href="?logout=1"><i class="icon-logout"></i> Logout</a><?php endif; ?>
 </div>
         <?php
         $path = fm_clean_path($path);
@@ -1702,7 +1727,7 @@ code.maxheight,pre.maxheight{max-height:512px}input[type="checkbox"]{margin:0;pa
 function fm_show_footer()
 {
     ?>
-<p class="center footer"><small><a href="https://github.com/alexantr/filemanager" target="_blank">PHP File Manager</a></small></p>
+<p class="center footer"><small><a href="https://github.com/ducalex/filemanager" target="_blank">PHP File Manager</a></small></p>
 </div>
 <script>
 function newfolder(p){var n=prompt('New folder name','folder');if(n!==null&&n!==''){window.location.search='p='+encodeURIComponent(p)+'&new='+encodeURIComponent(n);}}
